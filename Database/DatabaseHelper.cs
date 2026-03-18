@@ -37,10 +37,10 @@ namespace ProjectPO.Database
 
             try
             {
-                conn.Execute("PRAGMA journal_mode = WAL;");
-                conn.Execute("PRAGMA synchronous = OFF;");
                 conn.Execute("PRAGMA temp_store = MEMORY;");
                 conn.Execute("PRAGMA cache_size = 1000000;");
+                conn.Execute("PRAGMA synchronous = OFF;");
+                conn.Execute("PRAGMA journal_mode = MEMORY;");
             }
             catch
             {

@@ -41,13 +41,25 @@ namespace ProjectPO
 
             using (var conn = new SQLite.SQLiteConnection(dbFile))
             {
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_YEARMONTH_SUPPLIER ON Supplier(YearMonth, ASL_Supplier_Number)");
+                // Búsquedas por periodo + proveedor (muy importante)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_YEARMONTH_SUPPLIER 
+                   ON Supplier(YearMonth, ASL_Supplier_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_PO_LINE ON Supplier(PO_Number, PO_Line_Number)");
+                // Búsqueda por orden de compra
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_PO_LINE 
+                   ON Supplier(PO_Number, PO_Line_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_DATE_SUPPLIER ON Supplier(Spend_Date, ASL_Supplier_Number)");
+                // Búsqueda por proveedor (individual)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_SUPPLIER 
+                   ON Supplier(ASL_Supplier_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_COUNTRY_PLANT ON Supplier(Supplier_Country, Plant)");
+                // Búsqueda por país + planta
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_COUNTRY_PLANT 
+                   ON Supplier(Supplier_Country_Name, Plant_code)");
+
+                // Búsqueda por nombre proveedor (útil para filtros UI)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_NAME 
+                   ON Supplier(ASL_Supplier_Name)");
             }
         }
 
@@ -71,16 +83,19 @@ namespace ProjectPO
                 return;
             }
 
-            btnImportar.Enabled = false;
+            btnImportar.Enabled = false; 
+            progressBar1.Value = 0;
+            lblEstado.Text = "Iniciando importación...";
 
-            await Task.Run(() => ImportarUltraRapido());
+            await Task.Run(() => ImportarUltraRapidoOptimizado());
 
+            lblEstado.Text = "Importación completada";
             btnImportar.Enabled = true;
+            progressBar1.Value = 100;
 
-            MessageBox.Show("Importación terminada");
         }
 
-        private void ImportarUltraRapido()
+        private void ImportarUltraRapidoOptimizado()
         {
             using (var conn = DatabaseHelper.GetConnection())
             {
@@ -88,98 +103,124 @@ namespace ProjectPO
 
                 try
                 {
+                    var totalLineas = File.ReadLines(archivo).Count();
+                    int procesadas = 0;
+
+                    List<Supplier> lote = new List<Supplier>(1000);
+
                     using (var reader = new StreamReader(archivo))
                     {
-                        int contador = 0;
-
                         while (!reader.EndOfStream)
                         {
                             var linea = reader.ReadLine();
-
                             var c = linea.Split('\t');
-
-                            Supplier s = new Supplier();
 
                             int i = 0;
 
-                            s.ASL_Supplier_Name = c[i++];
-                            s.Supplier_Manager_Name = c[i++];
-                            s.Supplier_Management_Model = c[i++];
-                            s.PO_Number = c[i++];
-                            s.PO_Created_Date = c[i++];
-                            s.PO_Type = c[i++];
-
-                            int.TryParse(c[i++], out int line);
-                            s.PO_Line_Number = line;
-
-                            s.ASL_Category = c[i++];
-                            s.ASL_Sub_Category = c[i++];
-                            s.Expense_Type = c[i++];
-                            s.Spend_Source = c[i++];
-                            s.YearMonth = c[i++];
-                            s.ASL_Supplier_Number = c[i++];
-                            s.Supplier_Country = c[i++];
-                            s.Item_Code = c[i++];
-                            s.Item_Description = c[i++];
-                            s.Plant = c[i++];
-                            s.Invoice_Number = c[i++];
-
-                            DateTime.TryParse(c[i++], out DateTime fecha);
-                            s.Spend_Date = fecha;
-
-                            s.Supplier_Entity_Code = c[i++];
-                            s.Supplier_Entity_Name = c[i++];
-                            s.Buying_Country_Code = c[i++];
-                            s.Buying_Country_Name = c[i++];
-                            s.SL_Ultimate_Basin = c[i++];
-                            s.SL_Ultimate_Geounit = c[i++];
-                            s.SL_Ultimate_Division = c[i++];
-                            s.SL_Ultimate_Business_Line = c[i++];
-                            s.Hybrid_Category = c[i++];
-                            s.Hybrid_Sub_Category = c[i++];
-                            s.Hybrid_Family_Desc = c[i++];
-                            s.Hybrid_Commodity_Code = c[i++];
-                            s.Payment_Terms = c[i++];
-                            s.Invoice_Currency = c[i++];
-
-                            decimal.TryParse(c[i++], out decimal po);
-                            s.Spend_PO_USD = po;
-
-                            decimal.TryParse(c[i++], out decimal nonpo);
-                            s.Spend_Non_PO_USD = nonpo;
-
-                            decimal.TryParse(c[i++], out decimal total);
-                            s.Spend_USD = total;
-
-                            conn.Insert(s);
-
-                            contador++;
-
-                            if (contador % 1000 == 0)
+                            Supplier s = new Supplier
                             {
+                                ASL_Supplier_Name = GetValue(c, ref i),
+                                SL_Division_Code = GetValue(c, ref i),
+                                SL_Business_Line_Code = GetValue(c, ref i),
+                                SL_Business_Line_Desc = GetValue(c, ref i),
+                                Supplier_Manager_Name = GetValue(c, ref i),
+                                Supplier_Management_Model = GetValue(c, ref i),
+                                PO_Number = GetValue(c, ref i),
+                                PO_Created_Date = GetValue(c, ref i),
+                                PO_Line_Number = GetInt(c, ref i),
+                                ASL_Category = GetValue(c, ref i),
+                                ASL_Sub_Category = GetValue(c, ref i),
+                                Expense_Type = GetValue(c, ref i),
+                                Spend_Source = GetValue(c, ref i),
+                                YearMonth = GetValue(c, ref i),
+                                ASL_Supplier_Number = GetValue(c, ref i),
+                                Supplier_Country_Name = GetValue(c, ref i),
+                                Plant_code = GetValue(c, ref i),
+                                Supplier_Entity_Code = GetValue(c, ref i),
+                                Supplier_Entity_Name = GetValue(c, ref i),
+                                Simulated_NIS_Line_Desc = GetValue(c, ref i),
+                                Buying_Country_Code = GetValue(c, ref i),
+                                Buying_Country_Name = GetValue(c, ref i),
+                                SL_Ultimate_Basin_Code = GetValue(c, ref i),
+                                SL_Ultimate_Geounit_Code = GetValue(c, ref i),
+                                SL_Ultimate_Division_Code = GetValue(c, ref i),
+                                SL_Ultimate_Business_Line_Code = GetValue(c, ref i),
+                                SL_Ultimate_Business_Line_Desc = GetValue(c, ref i),
+                                Watch_List_Name = GetValue(c, ref i),
+                                Payment_Terms = GetValue(c, ref i),
+                                Spend_PO_USD = GetDecimal(c, ref i),
+                                Spend_Non_PO_USD = GetDecimal(c, ref i),
+                                Spend_USD = GetDecimal(c, ref i),
+                                DistinctCountInvoice_Number = GetInt(c, ref i)
+                            };
+
+                            lote.Add(s);
+                            procesadas++;
+
+                            if (lote.Count == 1000)
+                            {
+                                conn.InsertAll(lote);
+                                lote.Clear();
+                            }
+
+                            // Actualizar UI cada 1000 registros
+                            if (procesadas % 1000 == 0)
+                            {
+                                int progreso = (int)((procesadas * 100.0) / totalLineas);
+
                                 Invoke(new Action(() =>
                                 {
-                                    lblEstado.Text = $"Registros importados: {contador}";
+                                    progressBar1.Value = progreso;
+                                    lblEstado.Text = $"Importando... {procesadas:N0} registros";
                                 }));
                             }
                         }
                     }
 
+                    // Insertar lo restante
+                    if (lote.Count > 0)
+                        conn.InsertAll(lote);
+
                     conn.Commit();
                 }
-                catch
+                catch (Exception ex)
                 {
                     conn.Rollback();
-                    throw;
+
+                    Invoke(new Action(() =>
+                    {
+                        lblEstado.Text = "Error: " + ex.Message;
+                    }));
                 }
             }
-
-            Invoke(new Action(() =>
-            {
-                progressBar1.Value = 100;
-                lblEstado.Text = "Importación completada";
-            }));
         }
 
+
+        private string GetValue(string[] c, ref int i)
+        {
+            return i < c.Length ? c[i++] : "";
+        }
+
+        private int GetInt(string[] c, ref int i)
+        {
+            if (i < c.Length && int.TryParse(c[i], out int val))
+            {
+                i++;
+                return val;
+            }
+            i++;
+            return 0;
+        }
+
+        private decimal GetDecimal(string[] c, ref int i)
+        {
+            if (i < c.Length && decimal.TryParse(c[i], out decimal val))
+            {
+                i++;
+                return val;
+            }
+            i++;
+            return 0;
+        }
     }
 }

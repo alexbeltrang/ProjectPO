@@ -52,13 +52,25 @@ namespace ProjectPO
 
             using (var conn = new SQLite.SQLiteConnection(dbFile))
             {
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_YEARMONTH_SUPPLIER ON Supplier(YearMonth, ASL_Supplier_Number)");
+                // Búsquedas por periodo + proveedor (muy importante)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_YEARMONTH_SUPPLIER 
+                   ON Supplier(YearMonth, ASL_Supplier_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_PO_LINE ON Supplier(PO_Number, PO_Line_Number)");
+                // Búsqueda por orden de compra
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_PO_LINE 
+                   ON Supplier(PO_Number, PO_Line_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_DATE_SUPPLIER ON Supplier(Spend_Date, ASL_Supplier_Number)");
+                // Búsqueda por proveedor (individual)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_SUPPLIER 
+                   ON Supplier(ASL_Supplier_Number)");
 
-                conn.Execute("CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_COUNTRY_PLANT ON Supplier(Supplier_Country, Plant)");
+                // Búsqueda por país + planta
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_COUNTRY_PLANT 
+                   ON Supplier(Supplier_Country_Name, Plant_code)");
+
+                // Búsqueda por nombre proveedor (útil para filtros UI)
+                conn.Execute(@"CREATE INDEX IF NOT EXISTS IDX_SUPPLIER_NAME 
+                   ON Supplier(ASL_Supplier_Name)");
             }
         }
     }
